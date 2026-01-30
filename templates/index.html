@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Video Downloader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        /* CSS SAMA SEPERTI SEBELUMNYA, DENGAN SEDIKIT PENYESUAIAN WARNA */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Roboto', sans-serif; background-color: #f9f9f9; color: #333; line-height: 1.5; }
+
+        header { background: #fff; padding: 15px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100; }
+        .logo { font-size: 22px; font-weight: 700; color: #007bff; text-decoration: none; }
+        .logo span { color: #333; }
+
+        .hero { background: linear-gradient(135deg, #00609f 0%, #0093d6 100%); color: white; text-align: center; padding: 40px 15px 60px 15px; }
+        
+        .input-wrapper { max-width: 600px; margin: 0 auto; background: white; border-radius: 4px; display: flex; padding: 3px; }
+        .input-wrapper input { flex: 1; border: none; padding: 12px; font-size: 14px; outline: none; }
+        .paste-btn { background: #e8f0fe; color: #1967d2; border: none; padding: 0 20px; border-radius: 4px; font-weight: 600; cursor: pointer; }
+
+        .process-btn { width: 100%; max-width: 600px; margin: 20px auto 0; background: #28a745; color: white; border: none; padding: 14px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; display: block; }
+        .process-btn:disabled { background: #94d3a2; cursor: not-allowed; }
+
+        /* AREA HASIL */
+        #resultArea { display: none; max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; }
+        
+        .result-header { display: flex; padding: 15px; border-bottom: 1px solid #eee; gap: 15px; text-align: left; }
+        .thumb-img { width: 90px; height: 90px; object-fit: cover; border-radius: 6px; background: #ddd; flex-shrink: 0; }
+        .video-info h4 { font-size: 14px; margin-bottom: 5px; color: #333; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .video-info p { font-size: 12px; color: #666; }
+
+        /* CONTAINER TOMBOL DOWNLOAD */
+        .btn-stack { padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        
+        .dl-btn { 
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; padding: 12px; border-radius: 4px; 
+            font-weight: 600; font-size: 14px; color: white; border: none; cursor: pointer;
+            text-decoration: none; transition: 0.2s;
+        }
+        .dl-btn:disabled { opacity: 0.7; cursor: wait; }
+
+        /* VARIASI WARNA TOMBOL */
+        .btn-blue { background-color: #0d6efd; }
+        .btn-green { background-color: #198754; } 
+        .btn-red { background-color: #dc3545; } /* Merah YouTube */
+        .btn-orange { background-color: #fd7e14; }
+        .btn-dark { background-color: #343a40; margin-top: 5px; }
+
+        .loading-text { font-size: 14px; color: #666; text-align: center; margin-top: 10px; display: none; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="/" class="logo">Downloader <span>Video</span></a>
+    </header>
+
+    <section class="hero">
+        <h1>Pengunduh Universal (YT & TikTok)</h1>
+        
+        <div class="input-wrapper">
+            <input type="text" id="urlInput" placeholder="Tempel tautan YouTube atau TikTok..." autocomplete="off">
+            <button class="paste-btn" onclick="pasteLink()">Tempel</button>
+        </div>
+
+        <button class="process-btn" id="startBtn" onclick="analyzeUrl()">
+            <i class="fas fa-search"></i> Cari Video
+        </button>
+
+        <div id="resultArea">
+            <div class="result-header">
+                <img src="" id="thumbDisplay" class="thumb-img">
+                <div class="video-info">
+                    <h4 id="titleDisplay">Judul Video</h4>
+                    <p id="uploaderDisplay">Uploader</p>
+                </div>
+            </div>
+
+            <div class="btn-stack" id="buttonContainer">
+                </div>
+            
+            <div id="loadingMsg" class="loading-text">Sedang memproses, harap tunggu...</div>
+        </div>
+    </section>
+
+    <script>
+        // Paste Clipboard
+        async function pasteLink() {
+            try {
+                const text = await navigator.clipboard.readText();
+                document.getElementById('urlInput').value = text;
+            } catch (err) { alert('Paste manual saja.'); }
+        }
+
+        let currentUrl = "";
+
+        // TAHAP 1: ANALISA URL
+        async function analyzeUrl() {
+            const urlVal = document.getElementById('urlInput').value;
+            const startBtn = document.getElementById('startBtn');
+            const resultArea = document.getElementById('resultArea');
+            const btnContainer = document.getElementById('buttonContainer');
+
+            if (!urlVal) return alert("Link kosong!");
+            currentUrl = urlVal;
+
+            startBtn.disabled = true;
+            startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mencari...';
+            resultArea.style.display = 'none';
+            btnContainer.innerHTML = ''; // Bersihkan tombol lama
+
+            try {
+                const response = await fetch('/get-info', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: urlVal })
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    resultArea.style.display = 'block';
+                    document.getElementById('thumbDisplay').src = data.thumbnail;
+                    document.getElementById('titleDisplay').innerText = data.title;
+                    document.getElementById('uploaderDisplay').innerText = data.uploader;
+
+                    // --- LOGIKA PEMILIHAN TOMBOL ---
+                    if (data.is_youtube) {
+                        // JIKA YOUTUBE: Tampilkan Pilihan Resolusi
+                        btnContainer.innerHTML = `
+                            <button onclick="downloadFile('1080')" class="dl-btn btn-red"><i class="fas fa-video"></i> Download 1080p (FHD)</button>
+                            <button onclick="downloadFile('720')" class="dl-btn btn-blue"><i class="fas fa-video"></i> Download 720p (HD)</button>
+                            <button onclick="downloadFile('480')" class="dl-btn btn-green"><i class="fas fa-video"></i> Download 480p (SD)</button>
+                            <button onclick="downloadAudio()" class="dl-btn btn-orange"><i class="fas fa-music"></i> Download Audio (MP3)</button>
+                        `;
+                    } else {
+                        // JIKA TIKTOK/LAINNYA: Tampilkan Best Quality Saja
+                        btnContainer.innerHTML = `
+                            <button onclick="downloadFile('best')" class="dl-btn btn-blue"><i class="fas fa-download"></i> Download Video (Best Quality)</button>
+                            <button onclick="downloadAudio()" class="dl-btn btn-green"><i class="fas fa-music"></i> Download Audio (MP3)</button>
+                        `;
+                    }
+                    
+                    // Tombol Reset
+                    btnContainer.innerHTML += `<button onclick="location.reload()" class="dl-btn btn-dark">Cari Video Lain</button>`;
+
+                } else {
+                    alert('Gagal: ' + data.message);
+                }
+            } catch (e) { alert('Error koneksi server'); } 
+            finally {
+                startBtn.disabled = false;
+                startBtn.innerHTML = '<i class="fas fa-search"></i> Cari Video';
+            }
+        }
+
+        // TAHAP 2: EKSEKUSI DOWNLOAD VIDEO
+        async function downloadFile(quality) {
+            const loadingMsg = document.getElementById('loadingMsg');
+            const btns = document.querySelectorAll('.dl-btn');
+            
+            // Kunci semua tombol
+            btns.forEach(b => b.disabled = true);
+            loadingMsg.style.display = 'block';
+            loadingMsg.innerText = `Sedang memproses video kualitas ${quality === 'best' ? 'Terbaik' : quality + 'p'}...`;
+
+            try {
+                const response = await fetch('/download-video', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: currentUrl, quality: quality })
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    loadingMsg.innerText = "Selesai! Mengunduh file...";
+                    window.location.href = data.download_url;
+                } else {
+                    alert('Gagal: ' + data.message);
+                }
+            } catch (e) { alert('Gagal download'); }
+            finally {
+                btns.forEach(b => b.disabled = false);
+                loadingMsg.style.display = 'none';
+            }
+        }
+
+        // TAHAP 3: EKSEKUSI DOWNLOAD AUDIO
+        async function downloadAudio() {
+            const loadingMsg = document.getElementById('loadingMsg');
+            const btns = document.querySelectorAll('.dl-btn');
+            
+            btns.forEach(b => b.disabled = true);
+            loadingMsg.style.display = 'block';
+            loadingMsg.innerText = "Sedang mengkonversi ke MP3...";
+
+            try {
+                const response = await fetch('/download-audio', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: currentUrl })
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    window.location.href = data.download_url;
+                } else {
+                    alert('Gagal MP3: ' + data.message);
+                }
+            } catch (e) { alert('Gagal convert MP3'); }
+            finally {
+                btns.forEach(b => b.disabled = false);
+                loadingMsg.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
